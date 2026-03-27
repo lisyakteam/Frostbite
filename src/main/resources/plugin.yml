@@ -1,0 +1,6 @@
+name: Frostbite
+version: '1.0'
+main: me.junioraww.frostbite.Main
+api-version: '1.21'
+commands:
+  temp: {}
