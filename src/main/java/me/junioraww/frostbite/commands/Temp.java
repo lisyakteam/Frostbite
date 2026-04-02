@@ -12,10 +12,11 @@ import java.util.Map;
 public class Temp implements CommandExecutor {
   @Override
   public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
-    if (sender instanceof Player player) {
+    if (sender instanceof Player player && player.isOp()) {
       Map<String, Body> bodyTemps = Main.getPlugin().getBodyTemps();
       Body body = bodyTemps.get(player.getName().toLowerCase());
-      player.sendRichMessage("<yellow>Температура тела: <white>" + Math.ceil(366 + body.getTemperature() / 2.0) / 10);
+      player.sendRichMessage("<yellow>Температура тела: <white>" + Math.ceil((3660 + body.getTemperature() / 2.0)) / 100);
+      player.sendRichMessage("<yellow>Debug: <white>" + body.getTemperature());
     }
 
     return true;
