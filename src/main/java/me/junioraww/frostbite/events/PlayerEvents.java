@@ -3,24 +3,33 @@ package me.junioraww.frostbite.events;
 import com.destroystokyo.paper.event.player.PlayerJumpEvent;
 import me.junioraww.frostbite.Main;
 import me.junioraww.frostbite.utils.Body;
+import net.kyori.adventure.key.Key;
+import net.kyori.adventure.sound.Sound;
+import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import org.bukkit.Bukkit;
+import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.World;
 import org.bukkit.block.Biome;
 import org.bukkit.block.Block;
+import org.bukkit.block.data.BlockData;
 import org.bukkit.damage.DamageSource;
 import org.bukkit.damage.DamageType;
+import org.bukkit.entity.Item;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerItemConsumeEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerRespawnEvent;
+import org.bukkit.inventory.ItemStack;
 import org.bukkit.potion.PotionEffect;
 import org.bukkit.potion.PotionEffectType;
 
+import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 
 public class PlayerEvents implements Listener {
   private static final DamageSource fireDamage = DamageSource.builder(DamageType.IN_FIRE).build();
@@ -51,15 +60,37 @@ public class PlayerEvents implements Listener {
 
   @EventHandler
   public void playerDrink(PlayerItemConsumeEvent event) {
-    if (event.getItem().getType() == Material.POTION) {
-      Map<String, Body> bodyTemps = Main.getPlugin().getBodyTemps();
+    Material type = event.getItem().getType();
+    if (type == Material.POTION) {
       Player player = event.getPlayer();
-      String name = player.getName().toLowerCase();
+      Body body = Main.getPlugin().getBodyTemps().get(player.getName().toLowerCase());
 
-      Body body = bodyTemps.get(name);
+      if (body.getTemperature() > 0 && body.getTemperature() < 1000) body.setTemperature(0);
+      else if (body.getTemperature() >= 1000) body.sub(1000);
+    }
+    else if (type == Material.BAKED_POTATO) {
+      Player player = event.getPlayer();
+      Body body = Main.getPlugin().getBodyTemps().get(player.getName().toLowerCase());
 
-      if (body.getTemperature() > 0 && body.getTemperature() < 100) body.setTemperature(0);
-      else if (body.getTemperature() >= 100) body.sub(100);
+      if (body.getTemperature() < 0 && body.getTemperature() > -1000) body.setTemperature(0);
+      else if (body.getTemperature() <= -1000) body.add(1000);
+    }
+    else if (type == Material.POISONOUS_POTATO) {
+      Player player = event.getPlayer();
+      Body body = Main.getPlugin().getBodyTemps().get(player.getName().toLowerCase());
+      String model = event.getItem().getItemMeta().getItemModel().asString();
+      if (model.equals("cnk.tea")) {
+        if (body.getTemperature() > -1000 && body.getTemperature() < 0) body.setTemperature(0);
+        else if (body.getTemperature() <= -1000) body.add(1000);
+      }
+      else if (model.equals("cnk.coffee")) {
+        if (body.getTemperature() > -1000 && body.getTemperature() < 0) body.setTemperature(0);
+        else if (body.getTemperature() <= -1000) body.add(1000);
+      }
+      else if (model.equals("cnk.beer")) {
+        if (body.getTemperature() > -1000 && body.getTemperature() < 0) body.setTemperature(0);
+        else if (body.getTemperature() <= -1000) body.add(1000);
+      }
     }
   }
 
@@ -72,11 +103,15 @@ public class PlayerEvents implements Listener {
     body.add(1);
   }
 
+  private static Map<UUID, Integer> itemUse = new HashMap<>();
+
   public static void start() {
     Map<String, Body> bodyTemps = Main.getPlugin().getBodyTemps();
 
     Main.getPlugin().getServer().getScheduler().runTaskTimer(Main.getPlugin(), task -> {
       for (Player player : Bukkit.getOnlinePlayers()) {
+        if (player.getLocation().distanceSquared(player.getWorld().getSpawnLocation()) < 225) continue;
+
         Block block = player.getLocation().getBlock();
         Body body = bodyTemps.get(player.getName().toLowerCase());
 
@@ -87,37 +122,87 @@ public class PlayerEvents implements Listener {
 
         if (player.getWorld().getName().equals("world_event")) impact *= 2;
 
-        if (bodyTemperature <= 2000 && bodyTemperature >= -2000) {
+        if (bodyTemperature <= 4000 && bodyTemperature >= -4000) {
           body.add(impact);
-          if (body.getTemperature() > 2000) body.setTemperature(2000);
-          else if (body.getTemperature() < -2000) body.setTemperature(-2000);
+          if (body.getTemperature() > 4000) body.setTemperature(4000);
+          else if (body.getTemperature() < -4000) body.setTemperature(-4000);
         }
 
-        if (body.getTemperature() > 1300) {
-          if (player.hasPotionEffect(PotionEffectType.NAUSEA)) {
-            player.getPotionEffect(PotionEffectType.NAUSEA).withDuration(200).apply(player);
+        int T = body.getTemperature();
+
+        if (T < -1000) player.sendActionBar(serializer.deserialize("<aqua>Вам холодно..."));
+        if (T > 1000) {
+          ItemStack hand = player.getInventory().getItemInMainHand();
+          if (hand.getType() == Material.ICE || hand.getType() == Material.PACKED_ICE || hand.getType() == Material.BLUE_ICE) {
+            if (!itemUse.containsKey(player.getUniqueId())) itemUse.put(player.getUniqueId(), 5);
+            else itemUse.put(player.getUniqueId(), itemUse.get(player.getUniqueId()) - 1);
+
+            int value = itemUse.get(player.getUniqueId());
+            if (value == 0) {
+              hand.setAmount(hand.getAmount() - 1);
+              body.setTemperature(0);
+              itemUse.remove(player.getUniqueId());
+              player.sendActionBar(Component.text());
+              player.playSound(Sound.sound(Key.key("minecraft:entity.player.burp"), Sound.Source.PLAYER, 1, 1));
+            }
+            else player.sendActionBar(serializer.deserialize("<gold>Использование через: <white>" + value));
           }
-          else player.addPotionEffect(new PotionEffect(PotionEffectType.NAUSEA, 200, 1, true, false));
-        }
-        else if (body.getTemperature() < -1300) {
-          if (player.hasPotionEffect(PotionEffectType.SLOWNESS)) {
-            player.getPotionEffect(PotionEffectType.SLOWNESS).withDuration(30).apply(player);
+          else {
+            if (itemUse.containsKey(player.getUniqueId())) itemUse.remove(player.getUniqueId());
+            player.sendActionBar(serializer.deserialize("<gold>Вам жарко..."));
           }
-          else player.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 30, 1, true, false));
         }
 
-        if (body.getTemperature() < -500) player.sendActionBar(serializer.deserialize("<aqua>Вам холодно..."));
-        if (body.getTemperature() > 500) player.sendActionBar(serializer.deserialize("<gold>Вам жарко..."));
+        if (T > 3900 && Math.random() > 0.8) player.damage(1, fireDamage);
+        else if (T < -3900) player.setFreezeTicks(70);
 
-        if (body.getTemperature() < -1900) {
-          player.setFreezeTicks(30);
-          player.damage(1, coldDamage);
+        if (T > 2500) {
+          double radius = 10 * Math.sqrt(Math.random());
+          double angle = Math.random() * 2 * Math.PI;
+          double xOffset = Math.cos(angle) * radius;
+          double zOffset = Math.sin(angle) * radius;
+          Location center = player.getLocation().clone().add(xOffset, 0, zOffset);
+          if (player.getWorld().getEnvironment() == World.Environment.NORMAL) {
+            Block highest = center.getWorld().getHighestBlockAt(center.getBlockX(), center.getBlockZ());
+            center.setY(highest.getY());
+            if (Math.abs(center.getY() - player.getY()) <= 2) {
+              player.sendBlockChange(center, Material.WATER.createBlockData());
+            }
+          }
+          else {
+            boolean found = false;
+            for (int y = player.getLocation().getBlockY() + 2; y > player.getLocation().getBlockY() - 2; y--) {
+              center.setY(y);
+              Material type = center.getBlock().getType();
+              if (!type.isAir() && type.isOccluding()) {
+                found = true;
+                break;
+              }
+            }
+            if (!found) return;
+            player.sendBlockChange(center, Material.WATER.createBlockData());
+          }
         }
-        else if (body.getTemperature() > 1900) {
-          player.damage(1 + (body.getTemperature() - 1900) / 30.0, fireDamage);
+
+        if (T > 1000 || T < -1000) {
+          PotionEffect effect = null;
+          if (T > 3000) effect = getEffect(PotionEffectType.WEAKNESS, 3);
+          else if (T > 2000) effect = getEffect(PotionEffectType.SPEED, 2);
+          else if (T > 1000) effect = getEffect(PotionEffectType.WEAKNESS, 1);
+          else if (T < -3000) effect = getEffect(PotionEffectType.SLOWNESS, 3);
+          else if (T < -2000) effect = getEffect(PotionEffectType.SLOWNESS, 2);
+          else if (T < -1000) effect = getEffect(PotionEffectType.SLOWNESS, 1);
+
+          if (player.hasPotionEffect(effect.getType()))
+            player.getPotionEffect(effect.getType()).withAmplifier(effect.getAmplifier()).withDuration(70).apply(player);
+          else player.addPotionEffect(effect);
         }
       }
-    }, 15L, 15L);
+    }, 20L, 20L);
+  }
+
+  private static PotionEffect getEffect(PotionEffectType type, int amplifier) {
+    return new PotionEffect(type, 70, amplifier, true, false);
   }
 
   private static final Range defaultRange = new Range(10, 25);

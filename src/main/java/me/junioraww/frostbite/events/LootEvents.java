@@ -25,7 +25,7 @@ public class LootEvents implements Listener {
 
         if (t == 1) meta.customName(serializer.deserialize("<!italic>Термометр"));
         else if (t == 2) meta.customName(serializer.deserialize("<!italic>Градусник"));
-        meta.lore(List.of(serializer.deserialize("<!italic><gold>Апрельское событие 2026")));
+        meta.lore(List.of(serializer.deserialize("<!italic><yellow>Апрельское событие 2026")));
 
         thermo.setItemMeta(meta);
         availableLoot.add(thermo);
@@ -36,11 +36,8 @@ public class LootEvents implements Listener {
   @EventHandler
   public void onLootGenerate(LootGenerateEvent event) {
     if (!event.getWorld().getName().equals("world_event")) return;
-
       event.getLoot().add(new ItemStack(Material.POTION));
-
       event.getLoot().add(new ItemStack(Material.POTION));
-
       event.getLoot().add(availableLoot.get((int) (Math.random() * availableLoot.size())));
   }
 }

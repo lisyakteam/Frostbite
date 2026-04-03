@@ -1,13 +1,13 @@
 package me.junioraww.frostbite.utils;
 
 import org.bukkit.Material;
+import org.bukkit.World;
 import org.bukkit.block.Block;
-import org.bukkit.block.Campfire;
 import org.bukkit.block.Furnace;
-import org.bukkit.block.data.type.Candle;
 import org.bukkit.damage.DamageSource;
 import org.bukkit.damage.DamageType;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
 
 public class Body {
@@ -32,119 +32,78 @@ public class Body {
   }
 
   public int calculateImpact(Player player, int blockTemperature) {
-    int impact;
+    double impact;
+    int impact_2 = 0;
 
-    PlayerInventory inv = player.getInventory();
-    var boots = inv.getBoots();
-    var leg = inv.getLeggings();
-    var chest = inv.getChestplate();
-    var helmet = inv.getHelmet();
-
-    if (temperature > 0) impact = -1;
-    else if (temperature < 0) {
-      impact = 1;
-      if (chest.getType().equals(Material.LEATHER_CHESTPLATE)) impact += 1;
-    }
-    else impact = 0;
-
-    if (player.isSprinting()) impact += 1;
-
-    if (blockTemperature > 25) {
-      int add = blockTemperature - 25;
-
-      if (helmet != null && !helmet.isEmpty()) {
-        Material type = helmet.getType();
-        if (type.equals(Material.TURTLE_HELMET)) add /= 4;
-        else if (!type.equals(Material.CHAINMAIL_HELMET) && !type.equals(Material.LEATHER_HELMET)) add *= 1.5;
-      }
-      if (chest != null && !chest.isEmpty()) {
-        Material type = chest.getType();
-        if (!type.equals(Material.CHAINMAIL_CHESTPLATE) && !type.equals(Material.LEATHER_CHESTPLATE)) add *= 1.5;
-      }
-      if (leg != null && !leg.isEmpty()) {
-        Material type = leg.getType();
-        if (!type.equals(Material.CHAINMAIL_LEGGINGS) && !type.equals(Material.LEATHER_LEGGINGS)) add *= 1.5;
-      }
-      if (boots != null && !boots.isEmpty()) {
-        Material type = boots.getType();
-        if (!type.equals(Material.CHAINMAIL_BOOTS) && !type.equals(Material.LEATHER_BOOTS)) add *= 1.5;
-      }
-
-      impact += add;
-    }
-    if (blockTemperature < 10) {
-      double sub = blockTemperature - 10;
-
-      if (helmet != null && !helmet.isEmpty()) {
-        Material type = helmet.getType();
-        if (type.equals(Material.LEATHER_HELMET)) sub /= 1.5;
-        else if (!type.equals(Material.TURTLE_HELMET)) sub *= 1.5;
-      }
-      if (chest != null && !chest.isEmpty()) {
-        Material type = chest.getType();
-        if (type.equals(Material.LEATHER_CHESTPLATE)) sub /= 1.5;
-        else sub *= 1.5;
-      }
-      if (leg != null && !leg.isEmpty()) {
-        Material type = leg.getType();
-        if (type.equals(Material.LEATHER_LEGGINGS)) sub /= 1.5;
-        else sub *= 1.5;
-      }
-      if (boots != null && !boots.isEmpty()) {
-        Material type = boots.getType();
-        if (type.equals(Material.LEATHER_BOOTS)) sub /= 1.5;
-        else sub *= 1.5;
-      }
-
-      impact = impact + (int) sub;
-    }
+    PlayerInventory inventory = player.getInventory();
+    ItemStack boots = inventory.getBoots();
+    ItemStack chestplate = inventory.getChestplate();
+    ItemStack helmet = inventory.getHelmet();
 
     Block center = player.getLocation().getBlock();
+    World world = center.getWorld();
+    byte light = center.getLightFromSky();
 
-    /*if (!center.getWorld().isClearWeather()) {
-      player.sendMessage("weather");
-      if (player.getY() >= center.getWorld().getHighestBlockYAt(center.getX(), center.getZ())) {
-        impact = impact / 3 - 3;
-      }
-    }*/
+    if (center.getType().equals(Material.WATER)) {
+      if (temperature > 0) temperature = 0;
+    }
 
-    for (int[] side : sides) {
-      Block relative = center.getRelative(side[0], side[1], side[2]);
-      if (relative.getState() instanceof Furnace furnace && furnace.getBurnTime() > 0) {
-        if (side[1] == -1) player.damage(1, fireDamage);
-        impact += 28;
-        break;
-      }
-      else if (relative.getState() instanceof Campfire) {
-        impact += 14;
-        break;
-      }
-      else if (relative.getType().equals(Material.TORCH) || relative.getState() instanceof Candle) {
-        impact += 5;
-        break;
-      }
-      else if (relative.getType().equals(Material.MAGMA_BLOCK)) {
-        impact += 3;
-      }
-      else if (relative.getType().equals(Material.LAVA)) {
-        impact += 5;
+    for (int x = -2; x <= 2; x++) {
+      for (int y = -1; y <= 1; y++) {
+        for (int z = -2; z <= 2; z++) {
+          Block block = center.getRelative(x, y, z);
+          Material type = block.getType();
+          switch (type) {
+            case FURNACE -> {
+              Furnace furnace = (Furnace) block.getState();
+              if (furnace.getBurnTime() > 0) impact_2 += 24;
+            }
+            case CAMPFIRE -> impact_2 += 12;
+            case TORCH -> impact_2 += 4;
+            case LAVA -> impact_2 += 8;
+            case NETHER_PORTAL -> impact_2 += 6;
+          }
+        }
       }
     }
 
-    if (center.getType().equals(Material.WATER)) impact /= 2;
+    if (inventory.getItemInMainHand().getType().equals(Material.TORCH)
+    || inventory.getItemInOffHand().getType().equals(Material.TORCH)) impact_2 += 4;
+    if (player.getFireTicks() > 0) impact_2 += 10;
 
-    if (player.getFireTicks() > 0) impact += 4;
+    World.Environment environment = world.getEnvironment();
 
-    return impact;
+    if (environment == World.Environment.NORMAL && light == 0) return impact_2;
+
+    if (blockTemperature < 10) {
+      impact = (blockTemperature - 10) * (light / 15.0);
+      if (chestplate.getType().equals(Material.LEATHER_CHESTPLATE)) impact /= 2;
+      else if (boots.getType().equals(Material.LEATHER_BOOTS)) impact /= 2;
+
+      if (!world.isClearWeather() && center.getY() >= world.getHighestBlockYAt(center.getX(), center.getZ())) impact *= 3;
+    }
+    else if (blockTemperature > 25) {
+      impact = environment.equals(World.Environment.NORMAL) ?
+              (blockTemperature - 25) * (light / 15.0) // Normal (depends on sky light)
+            : (blockTemperature - 25);               // Other
+
+      if (helmet.getType().equals(Material.TURTLE_HELMET)) impact /= 4;
+      else if (helmet.getType() != Material.AIR) impact *= (1 + light / 15.0);
+
+      if (chestplate.getType() != Material.AIR) impact *= (1 + light / 30.0);
+    }
+    else {
+      if (temperature > 0) {
+        impact = -1;
+      }
+      else if (temperature < 0) {
+        impact = 1;
+        if (temperature < -3 && chestplate.getType().equals(Material.LEATHER_CHESTPLATE)) impact += 2;
+        if (temperature < -3 && boots.getType().equals(Material.LEATHER_BOOTS)) impact += 2;
+      }
+      else impact = 0;
+    }
+
+    return (int) impact + impact_2;
   }
-
-  static final int[][] sides = new int[][] {
-          {0, 0, 0},
-          { 0, -1, 0 },
-          { 0, 2, 0 },
-          { 1, 0, 0 },
-          { -1, 0, 0 },
-          { 0, 0, 1 },
-          { 0, 0, -1 },
-  };
 }
